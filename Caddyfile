@@ -1,0 +1,22 @@
+# Caddy routes one domain to both services and gets HTTPS automatically
+# (Let's Encrypt) once DOMAIN's DNS points at this server. Use DOMAIN=localhost
+# for local testing (Caddy issues an internal certificate).
+
+{$DOMAIN} {
+	encode gzip
+
+	# API: strip the /api prefix so the backend sees /analyze, /auth/login, etc.
+	handle_path /api/* {
+		reverse_proxy backend:8009
+	}
+
+	# Rendered clips are served by the backend at /files/*.
+	handle /files/* {
+		reverse_proxy backend:8009
+	}
+
+	# Everything else is the Next.js app.
+	handle {
+		reverse_proxy frontend:3000
+	}
+}

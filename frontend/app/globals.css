@@ -1,0 +1,122 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* Clean light theme (Nordcraft-like) with a warm heat accent */
+  --background: 220 20% 99%;
+  --foreground: 222 24% 10%;
+
+  --card: 0 0% 100%;
+  --card-foreground: 222 24% 10%;
+
+  --muted: 220 16% 96%;
+  --muted-foreground: 220 9% 46%;
+
+  --border: 220 16% 90%;
+  --input: 220 16% 90%;
+  --ring: 12 90% 55%;
+
+  /* Heat gradient: red -> orange (matches the heatmap concept) */
+  --primary: 351 83% 59%;
+  --primary-foreground: 0 0% 100%;
+  --heat-from: 351 83% 59%;
+  --heat-to: 24 95% 55%;
+
+  --radius: 0.85rem;
+
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica,
+    Arial, sans-serif;
+}
+
+.dark {
+  --background: 224 24% 6%;
+  --foreground: 220 20% 96%;
+
+  --card: 222 22% 10%;
+  --card-foreground: 220 20% 96%;
+
+  --muted: 222 16% 15%;
+  --muted-foreground: 220 12% 60%;
+
+  --border: 222 16% 20%;
+  --input: 222 16% 22%;
+  --ring: 12 90% 55%;
+
+  /* heat accent stays vivid on dark */
+  --primary: 351 85% 62%;
+  --primary-foreground: 0 0% 100%;
+  --heat-from: 351 85% 62%;
+  --heat-to: 24 95% 58%;
+}
+
+* {
+  border-color: hsl(var(--border));
+}
+
+body {
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Subtle grid / glow backdrop utilities used by the landing hero */
+.bg-grid {
+  background-image: radial-gradient(
+    hsl(220 16% 88%) 1px,
+    transparent 1px
+  );
+  background-size: 22px 22px;
+  mask-image: radial-gradient(ellipse 80% 60% at 50% 0%, #000 40%, transparent 100%);
+}
+.dark .bg-grid {
+  background-image: radial-gradient(hsl(220 16% 24%) 1px, transparent 1px);
+}
+.heat-text {
+  background: linear-gradient(135deg, hsl(var(--heat-from)), hsl(var(--heat-to)));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* Brand flame — a subtle, continuous flicker so the logo feels alive. */
+@keyframes flame-flicker {
+  0%,
+  100% {
+    transform: scale(1) rotate(0deg);
+  }
+  20% {
+    transform: scale(1.1) rotate(-5deg);
+  }
+  45% {
+    transform: scale(0.96) rotate(4deg);
+  }
+  70% {
+    transform: scale(1.06) rotate(-2deg);
+  }
+}
+.animate-flame {
+  animation: flame-flicker 2.6s ease-in-out infinite;
+  transform-origin: 50% 82%;
+}
+@media (prefers-reduced-motion: reduce) {
+  .animate-flame {
+    animation: none;
+  }
+}
+
+/* Branded clip-render loader — heatmap "equalizer" bars. */
+@keyframes eq {
+  0%,
+  100% {
+    transform: scaleY(0.28);
+  }
+  50% {
+    transform: scaleY(1);
+  }
+}
+.animate-eq {
+  animation: eq 0.9s ease-in-out infinite;
+  transform-origin: bottom;
+}

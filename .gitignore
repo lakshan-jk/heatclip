@@ -1,0 +1,23 @@
+# Python
+backend/.venv/
+__pycache__/
+*.pyc
+
+# Rendered output / temp
+backend/storage/
+*.mp4
+*.part
+
+# Runtime data & secrets (never commit)
+backend/heatclip.db
+backend/.secret
+data/
+
+# Node / Next.js
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+
+# Env
+.env
+.env.local

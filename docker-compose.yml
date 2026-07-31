@@ -1,0 +1,44 @@
+# HeatClip — fully open-source self-hosting stack.
+# Services: FastAPI backend, Next.js frontend, Caddy reverse proxy (automatic HTTPS).
+# Everything here is OSS: Docker, Caddy (Apache-2.0), Next.js (MIT), FastAPI (MIT),
+# SQLite (public domain), yt-dlp (Unlicense), ffmpeg (LGPL/GPL).
+
+services:
+  backend:
+    build: ./backend
+    environment:
+      - HEATCLIP_DATA=/data
+      - HEATCLIP_SECRET=${HEATCLIP_SECRET:-}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+    volumes:
+      - heatclip_data:/data # SQLite DB, session secret, rendered clips
+    restart: unless-stopped
+
+  frontend:
+    build: ./frontend
+    environment:
+      - NODE_ENV=production
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+  caddy:
+    image: caddy:2-alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      - DOMAIN=${DOMAIN:-localhost}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data # persisted TLS certificates
+      - caddy_config:/config
+    depends_on:
+      - frontend
+      - backend
+    restart: unless-stopped
+
+volumes:
+  heatclip_data:
+  caddy_data:
+  caddy_config:
