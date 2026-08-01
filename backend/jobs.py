@@ -5,7 +5,9 @@ simple; swap for Redis/RQ when you need multiple workers or persistence.
 """
 from __future__ import annotations
 
+import shutil
 import threading
+import time
 import uuid
 from dataclasses import asdict, dataclass, field
 from typing import Optional
@@ -14,6 +16,8 @@ from config import DATA_DIR
 from renderer import RenderError, render_clip
 
 STORAGE = DATA_DIR / "storage"
+CLEANUP_TTL = 6 * 3600      # delete rendered clips older than 6h
+CLEANUP_EVERY = 1800        # sweep every 30 min
 
 
 @dataclass
@@ -101,3 +105,28 @@ def run_job(job_id: str, files_base_url: str = "/files") -> None:
             clip.status = "error"
             clip.error = str(exc)[:300]
     job.status = "error" if all(c.status == "error" for c in job.clips) else "done"
+
+
+def start_cleanup() -> None:
+    """Background sweep: delete old render output + drop stale in-memory jobs so
+    disk usage stays bounded in production."""
+
+    def loop() -> None:
+        while True:
+            time.sleep(CLEANUP_EVERY)
+            cutoff = time.time() - CLEANUP_TTL
+            try:
+                for d in STORAGE.iterdir():
+                    if d.is_dir() and d.stat().st_mtime < cutoff:
+                        shutil.rmtree(d, ignore_errors=True)
+            except Exception:  # noqa: BLE001 - cleanup must never crash the app
+                pass
+            with _LOCK:
+                for jid in [
+                    j for j, job in _JOBS.items()
+                    if job.status in ("done", "error")
+                    and not (STORAGE / j).exists()
+                ]:
+                    _JOBS.pop(jid, None)
+
+    threading.Thread(target=loop, daemon=True).start()

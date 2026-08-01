@@ -21,6 +21,7 @@ import {
   X,
   ChevronUp,
   ChevronDown,
+  Lock,
 } from "lucide-react";
 import HeatmapTimeline from "@/components/HeatmapTimeline";
 import { AppBar } from "@/components/app/AppBar";
@@ -32,12 +33,27 @@ import { Badge } from "@/components/ui/badge";
 import {
   analyze,
   getJob,
+  me,
   render,
   type AnalyzeResult,
   type JobStatus,
 } from "@/lib/api";
 import { fmtTime, parseTime } from "@/lib/format";
 import { sfx } from "@/lib/audio";
+
+// Client-side mirror of the server's plan limits (server still enforces).
+const PLAN_MAX_QUALITY: Record<string, string> = {
+  free: "1080p",
+  creator: "2k",
+  studio: "4k",
+  admin: "4k",
+};
+function planAllowsQuality(plan: string, id: string): boolean {
+  const order = ["720p", "1080p", "2k", "4k"];
+  const max = PLAN_MAX_QUALITY[plan] ?? "1080p";
+  return order.indexOf(id) <= order.indexOf(max);
+}
+const planAllowsAutoframe = (plan: string) => plan !== "free";
 
 interface Clip {
   id: string;
@@ -162,6 +178,7 @@ export function AppClient() {
   const [quality, setQuality] = useState("1080p");
   const [autoFrame, setAutoFrame] = useState(true);
   const [reframeNudge, setReframeNudge] = useState(0); // -0.2..0.2 horizontal shift
+  const [plan, setPlan] = useState("free");
   const [job, setJob] = useState<JobStatus | null>(null);
   const [reelIdx, setReelIdx] = useState<number | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -229,6 +246,13 @@ export function AppClient() {
       setUrl(q);
       runAnalyze(q);
     }
+    // load the signed-in user's plan to gate PRO features (server also enforces)
+    me().then((u) => {
+      if (u) {
+        setPlan(u.plan);
+        if (!planAllowsAutoframe(u.plan)) setAutoFrame(false);
+      }
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -569,42 +593,54 @@ export function AppClient() {
               <span className="w-20 text-xs font-medium text-muted-foreground">
                 Quality
               </span>
-              {availableQualities(data.maxHeight || 0).map((q) => (
-                <button
-                  key={q.id}
-                  onClick={() => {
-                    setQuality(q.id);
-                    sfx.click();
-                  }}
-                  className={`inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-semibold tabular-nums transition-all ${
-                    quality === q.id
-                      ? "bg-heat text-white shadow-glow"
-                      : "border border-border bg-muted/50 text-foreground hover:bg-muted"
-                  }`}
-                >
-                  {q.label}
-                  {q.note && (
-                    <span
-                      className={
-                        quality === q.id ? "opacity-80" : "text-muted-foreground"
-                      }
-                    >
-                      {q.note}
-                    </span>
-                  )}
-                  {q.pro && (
-                    <span
-                      className={`rounded px-1 text-[9px] font-bold ${
-                        quality === q.id
-                          ? "bg-white/25 text-white"
-                          : "bg-amber-400/20 text-amber-600"
-                      }`}
-                    >
-                      PRO
-                    </span>
-                  )}
-                </button>
-              ))}
+              {availableQualities(data.maxHeight || 0).map((q) => {
+                const locked = !planAllowsQuality(plan, q.id);
+                return (
+                  <button
+                    key={q.id}
+                    disabled={locked}
+                    title={locked ? "Upgrade to unlock" : undefined}
+                    onClick={() => {
+                      if (locked) return;
+                      setQuality(q.id);
+                      sfx.click();
+                    }}
+                    className={`inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-semibold tabular-nums transition-all ${
+                      quality === q.id
+                        ? "bg-heat text-white shadow-glow"
+                        : locked
+                        ? "cursor-not-allowed border border-border bg-muted/30 text-muted-foreground/60"
+                        : "border border-border bg-muted/50 text-foreground hover:bg-muted"
+                    }`}
+                  >
+                    {q.label}
+                    {q.note && (
+                      <span
+                        className={
+                          quality === q.id ? "opacity-80" : "text-muted-foreground"
+                        }
+                      >
+                        {q.note}
+                      </span>
+                    )}
+                    {locked ? (
+                      <Lock className="h-3 w-3" />
+                    ) : (
+                      q.pro && (
+                        <span
+                          className={`rounded px-1 text-[9px] font-bold ${
+                            quality === q.id
+                              ? "bg-white/25 text-white"
+                              : "bg-amber-400/20 text-amber-600"
+                          }`}
+                        >
+                          PRO
+                        </span>
+                      )
+                    )}
+                  </button>
+                );
+              })}
               <span className="ml-auto hidden text-[11px] text-muted-foreground sm:block">
                 {data.maxHeight >= 720
                   ? `Max quality for this video: ${data.maxHeight}p`
@@ -617,18 +653,19 @@ export function AppClient() {
                 Reframe
               </span>
               <Switch
-                checked={autoFrame}
+                checked={autoFrame && planAllowsAutoframe(plan)}
+                disabled={!planAllowsAutoframe(plan)}
                 onCheckedChange={(v) => {
                   setAutoFrame(v);
                   sfx.hover();
                 }}
               />
               <span className="text-sm font-medium">Auto-reframe subject</span>
-              <span className="rounded bg-amber-400/20 px-1 text-[9px] font-bold text-amber-600">
-                PRO
+              <span className="inline-flex items-center gap-0.5 rounded bg-amber-400/20 px-1 text-[9px] font-bold text-amber-600">
+                {!planAllowsAutoframe(plan) && <Lock className="h-2.5 w-2.5" />} PRO
               </span>
 
-              {autoFrame && (
+              {autoFrame && planAllowsAutoframe(plan) && (
                 <div className="flex items-center gap-1.5">
                   <span className="text-xs text-muted-foreground">Nudge</span>
                   <div className="flex overflow-hidden rounded-lg border border-border">
@@ -654,7 +691,9 @@ export function AppClient() {
               )}
 
               <span className="ml-auto hidden text-[11px] text-muted-foreground sm:block">
-                {autoFrame
+                {!planAllowsAutoframe(plan)
+                  ? "Upgrade to auto-follow the speaker"
+                  : autoFrame
                   ? "Follows the speaker · nudge if it frames the wrong side"
                   : "Simple center-crop"}
               </span>

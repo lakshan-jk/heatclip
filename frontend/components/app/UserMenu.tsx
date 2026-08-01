@@ -33,8 +33,13 @@ export function UserMenu() {
 
   return (
     <div className="flex items-center gap-2">
+      {user.plan && user.plan !== "free" && (
+        <span className="rounded-full bg-heat/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-primary">
+          {user.plan === "admin" ? "Admin" : "Pro"}
+        </span>
+      )}
       <span
-        title={user.email}
+        title={`${user.email} · ${user.plan}`}
         className="grid h-8 w-8 place-items-center rounded-full bg-heat text-xs font-bold text-white"
       >
         {initial}

@@ -5,10 +5,12 @@ import { cn } from "@/lib/utils";
 export function Switch({
   checked,
   onCheckedChange,
+  disabled = false,
   className,
 }: {
   checked: boolean;
   onCheckedChange: (v: boolean) => void;
+  disabled?: boolean;
   className?: string;
 }) {
   return (
@@ -16,10 +18,12 @@ export function Switch({
       type="button"
       role="switch"
       aria-checked={checked}
-      onClick={() => onCheckedChange(!checked)}
+      disabled={disabled}
+      onClick={() => !disabled && onCheckedChange(!checked)}
       className={cn(
         "relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors",
         checked ? "bg-heat" : "bg-border",
+        disabled && "cursor-not-allowed opacity-50",
         className
       )}
     >

@@ -28,10 +28,15 @@ def init_db() -> None:
                 name       TEXT,
                 pw_hash    TEXT NOT NULL,
                 salt       TEXT NOT NULL,
+                plan       TEXT NOT NULL DEFAULT 'free',
                 created_at TEXT NOT NULL
             )
             """
         )
+        # Migrate older DBs that predate the plan column.
+        cols = {r["name"] for r in c.execute("PRAGMA table_info(users)")}
+        if "plan" not in cols:
+            c.execute("ALTER TABLE users ADD COLUMN plan TEXT NOT NULL DEFAULT 'free'")
         c.execute(
             """
             CREATE TABLE IF NOT EXISTS contacts (

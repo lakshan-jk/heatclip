@@ -31,6 +31,7 @@ export interface AnalyzeResult {
 export interface User {
   email: string;
   name: string;
+  plan: string; // free | creator | studio | admin
 }
 
 export interface ClipResult {
@@ -72,9 +73,13 @@ export async function render(
   autoFrame: boolean = true,
   reframeNudge: number = 0
 ): Promise<{ jobId: string }> {
+  const token = getToken();
   const res = await fetch("/api/render", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
     body: JSON.stringify({ url, clips, quality, autoFrame, reframeNudge }),
   });
   return jsonOrThrow(res);

@@ -8,33 +8,66 @@ Endpoints:
 """
 from __future__ import annotations
 
-from pathlib import Path
-
+import logging
+import os
 from datetime import datetime, timezone
 
-from fastapi import BackgroundTasks, FastAPI, Header, HTTPException
+from fastapi import BackgroundTasks, FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 import auth
+import config
 import db
 import jobs
+import security
 from analyzer import AnalyzeError, analyze
 from hooks import generate_candidates
 
+log = logging.getLogger("heatclip")
 app = FastAPI(title="HeatClip API")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # tighten for production
-    allow_methods=["*"],
+    allow_origins=config.ALLOWED_ORIGINS,
+    allow_methods=["GET", "POST"],
     allow_headers=["*"],
+    max_age=3600,
 )
 
 db.init_db()
 jobs.STORAGE.mkdir(exist_ok=True)
 app.mount("/files", StaticFiles(directory=str(jobs.STORAGE)), name="files")
+
+
+@app.on_event("startup")
+def _startup() -> None:
+    if not os.environ.get("HEATCLIP_SECRET"):
+        log.warning(
+            "HEATCLIP_SECRET not set — using a generated dev secret. Set it in "
+            "production so sessions are stable and secret across restarts."
+        )
+    if config.ALLOWED_ORIGINS == ["*"]:
+        log.warning("ALLOWED_ORIGINS is '*' — restrict this to your domain in production.")
+    jobs.start_cleanup()  # background TTL cleanup of old render output
+
+
+def _plan_from_header(authorization: str) -> tuple[str, str]:
+    """Resolve (plan, email) from an optional Bearer token; anonymous → free."""
+    token = (authorization or "").replace("Bearer ", "").strip()
+    if not token:
+        return "free", ""
+    try:
+        user = auth.user_from_token(token)
+        return user.get("plan", "free"), user.get("email", "")
+    except auth.AuthError:
+        return "free", ""
+
+
+def _limit(request: Request, name: str, limit: int, window: int) -> None:
+    if not security.rate_limit(request, name, limit, window):
+        raise HTTPException(429, "Too many requests — please slow down and try again.")
 
 
 class AnalyzeRequest(BaseModel):
@@ -81,7 +114,8 @@ def health() -> dict:
 
 
 @app.post("/auth/signup")
-def signup_endpoint(req: SignupRequest) -> dict:
+def signup_endpoint(req: SignupRequest, request: Request) -> dict:
+    _limit(request, "signup", 5, 3600)
     try:
         return auth.signup(req.email, req.password, req.name)
     except auth.AuthError as exc:
@@ -89,7 +123,8 @@ def signup_endpoint(req: SignupRequest) -> dict:
 
 
 @app.post("/auth/login")
-def login_endpoint(req: LoginRequest) -> dict:
+def login_endpoint(req: LoginRequest, request: Request) -> dict:
+    _limit(request, "login", 10, 300)  # brute-force protection
     try:
         return auth.login(req.email, req.password)
     except auth.AuthError as exc:
@@ -108,22 +143,29 @@ def me_endpoint(authorization: str = Header(default="")) -> dict:
 
 
 @app.post("/contact")
-def contact_endpoint(req: ContactRequest) -> dict:
-    if not req.message.strip():
+def contact_endpoint(req: ContactRequest, request: Request) -> dict:
+    _limit(request, "contact", 5, 3600)
+    msg = (req.message or "").strip()
+    if not msg:
         raise HTTPException(400, "Message is required")
+    if len(msg) > 5000:
+        raise HTTPException(400, "Message is too long")
     db.save_contact(
-        req.name, req.email, req.topic, req.message,
+        req.name[:120], req.email[:200], req.topic[:60], msg,
         datetime.now(timezone.utc).isoformat(),
     )
     return {"ok": True}
 
 
 @app.post("/analyze")
-def analyze_endpoint(req: AnalyzeRequest) -> dict:
-    if not req.url.strip():
-        raise HTTPException(400, "Missing url")
+def analyze_endpoint(req: AnalyzeRequest, request: Request) -> dict:
+    _limit(request, "analyze", 30, 60)
     try:
-        result = analyze(req.url)
+        url = security.validate_youtube_url(req.url)
+    except security.ValidationError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    try:
+        result = analyze(url)
     except AnalyzeError as exc:
         raise HTTPException(422, str(exc)) from exc
 
@@ -134,23 +176,38 @@ def analyze_endpoint(req: AnalyzeRequest) -> dict:
 
 
 @app.post("/render")
-def render_endpoint(req: RenderRequest, background: BackgroundTasks) -> dict:
-    if not req.clips:
-        raise HTTPException(400, "No clips to render")
-    for c in req.clips:
-        if c.end <= c.start:
-            raise HTTPException(400, "Clip end must be after start")
-    quality = req.quality if req.quality in {"720p", "1080p", "2k", "4k"} else "1080p"
+def render_endpoint(
+    req: RenderRequest,
+    background: BackgroundTasks,
+    request: Request,
+    authorization: str = Header(default=""),
+) -> dict:
+    _limit(request, "render", 10, 600)  # expensive: heavy per-IP limit
+    try:
+        url = security.validate_youtube_url(req.url)
+    except security.ValidationError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+    # Subscription enforcement (server-side — never trust the client).
+    plan, _email = _plan_from_header(authorization)
+    quality, auto_frame, max_clips = security.enforce_plan(
+        plan, req.quality, req.autoFrame
+    )
+    try:
+        security.validate_clips(req.clips, max_clips)
+    except security.ValidationError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
     nudge = max(-0.35, min(0.35, req.reframeNudge))
     job = jobs.create_job(
-        req.url,
+        url,
         [c.model_dump() for c in req.clips],
         quality=quality,
-        auto_frame=req.autoFrame,
+        auto_frame=auto_frame,
         reframe_nudge=nudge,
     )
     background.add_task(jobs.run_job, job.id)
-    return {"jobId": job.id, "status": job.status}
+    return {"jobId": job.id, "status": job.status, "plan": plan, "quality": quality}
 
 
 @app.get("/jobs/{job_id}")

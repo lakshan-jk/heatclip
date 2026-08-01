@@ -10,6 +10,8 @@ services:
       - HEATCLIP_DATA=/data
       - HEATCLIP_SECRET=${HEATCLIP_SECRET:-}
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-*}
+      - HEATCLIP_ADMINS=${HEATCLIP_ADMINS:-}
     volumes:
       - heatclip_data:/data # SQLite DB, session secret, rendered clips
     restart: unless-stopped

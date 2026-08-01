@@ -5,6 +5,16 @@
 {$DOMAIN} {
 	encode gzip
 
+	# Security headers
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "SAMEORIGIN"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "geolocation=(), microphone=(), camera=()"
+		-Server
+	}
+
 	# API: strip the /api prefix so the backend sees /analyze, /auth/login, etc.
 	handle_path /api/* {
 		reverse_proxy backend:8009

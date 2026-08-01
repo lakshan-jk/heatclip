@@ -8,6 +8,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import os
+import re
 import secrets
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -15,6 +16,7 @@ from pathlib import Path
 import jwt
 
 import db
+import config
 from config import DATA_DIR
 
 _ALGO = "HS256"
@@ -50,25 +52,41 @@ def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def _valid_email(email: str) -> bool:
+    return bool(re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", email))
+
+
 def signup(email: str, password: str, name: str) -> dict:
-    email = email.strip().lower()
-    if "@" not in email or len(password) < 6:
-        raise AuthError("Enter a valid email and a password of at least 6 characters.")
+    email = (email or "").strip().lower()
+    name = (name or "").strip()[:80]
+    if not _valid_email(email):
+        raise AuthError("Enter a valid email address.")
+    if len(password or "") < 6 or len(password) > 200:
+        raise AuthError("Password must be 6–200 characters.")
     if db.get_user_by_email(email):
         raise AuthError("An account with this email already exists.")
     salt = secrets.token_hex(16)
-    user = db.create_user(email, name.strip(), _hash(password, salt), salt, _now_iso())
-    return {"token": make_token(email), "user": {"email": email, "name": name.strip()}}
+    db.create_user(email, name, _hash(password, salt), salt, _now_iso())
+    return {
+        "token": make_token(email),
+        "user": {"email": email, "name": name, "plan": config.plan_for(email, "free")},
+    }
 
 
 def login(email: str, password: str) -> dict:
-    email = email.strip().lower()
+    email = (email or "").strip().lower()
+    if not _valid_email(email) or not password:
+        raise AuthError("Enter your email and password.")
     user = db.get_user_by_email(email)
     if not user or not hmac.compare_digest(user["pw_hash"], _hash(password, user["salt"])):
         raise AuthError("Incorrect email or password.")
     return {
         "token": make_token(email),
-        "user": {"email": email, "name": user["name"]},
+        "user": {
+            "email": email,
+            "name": user["name"],
+            "plan": config.plan_for(email, user["plan"]),
+        },
     }
 
 
@@ -89,4 +107,8 @@ def user_from_token(token: str) -> dict:
     user = db.get_user_by_email(payload.get("sub", ""))
     if not user:
         raise AuthError("Account not found.")
-    return {"email": user["email"], "name": user["name"]}
+    return {
+        "email": user["email"],
+        "name": user["name"],
+        "plan": config.plan_for(user["email"], user["plan"]),
+    }
