@@ -71,7 +71,8 @@ export async function render(
   clips: { start: number; end: number }[],
   quality: string = "1080p",
   autoFrame: boolean = true,
-  reframeNudge: number = 0
+  reframeNudge: number = 0,
+  captions: boolean = true
 ): Promise<{ jobId: string }> {
   const token = getToken();
   const res = await fetch("/api/render", {
@@ -80,7 +81,7 @@ export async function render(
       "Content-Type": "application/json",
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
-    body: JSON.stringify({ url, clips, quality, autoFrame, reframeNudge }),
+    body: JSON.stringify({ url, clips, quality, autoFrame, reframeNudge, captions }),
   });
   return jsonOrThrow(res);
 }

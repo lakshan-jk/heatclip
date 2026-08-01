@@ -12,6 +12,7 @@ import uuid
 from dataclasses import asdict, dataclass, field
 from typing import Optional
 
+import analyzer
 from config import DATA_DIR
 from renderer import RenderError, render_clip
 
@@ -37,6 +38,7 @@ class Job:
     quality: str = "1080p"
     auto_frame: bool = True
     reframe_nudge: float = 0.0
+    captions: bool = False
     status: str = "pending"  # pending|running|done|error
     clips: list[ClipResult] = field(default_factory=list)
     error: Optional[str] = None
@@ -62,6 +64,7 @@ def create_job(
     quality: str = "1080p",
     auto_frame: bool = True,
     reframe_nudge: float = 0.0,
+    captions: bool = False,
 ) -> Job:
     job_id = uuid.uuid4().hex[:12]
     job = Job(
@@ -70,6 +73,7 @@ def create_job(
         quality=quality,
         auto_frame=auto_frame,
         reframe_nudge=reframe_nudge,
+        captions=captions,
         clips=[
             ClipResult(index=i, start=float(c["start"]), end=float(c["end"]))
             for i, c in enumerate(clips)
@@ -89,6 +93,8 @@ def run_job(job_id: str, files_base_url: str = "/files") -> None:
     if not job:
         return
     job.status = "running"
+    # Fetch the transcript once for the whole job if captions are enabled.
+    caps = analyzer.fetch_captions(job.url) if job.captions else None
     for clip in job.clips:
         out = STORAGE / job.id / f"clip_{clip.index}.mp4"
         try:
@@ -97,6 +103,7 @@ def run_job(job_id: str, files_base_url: str = "/files") -> None:
                 quality=job.quality,
                 auto_frame=job.auto_frame,
                 reframe_nudge=job.reframe_nudge,
+                captions_data=caps,
                 on_status=lambda s, c=clip: setattr(c, "status", s),
             )
             clip.status = "done"

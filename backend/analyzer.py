@@ -239,3 +239,15 @@ def analyze(url: str, with_captions: bool = True) -> VideoAnalysis:
         heatmap=heatmap,
         captions=captions,
     )
+
+
+def fetch_captions(url: str) -> list[Caption]:
+    """Captions-only fetch (for the renderer's burned subtitles). Best-effort."""
+    try:
+        info = _extract(url)
+        tracks = _pick_caption_track(
+            info.get("automatic_captions") or {}, info.get("subtitles") or {}
+        )
+        return _fetch_captions(tracks) if tracks else []
+    except Exception:  # noqa: BLE001
+        return []

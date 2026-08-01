@@ -178,6 +178,7 @@ export function AppClient() {
   const [quality, setQuality] = useState("1080p");
   const [autoFrame, setAutoFrame] = useState(true);
   const [reframeNudge, setReframeNudge] = useState(0); // -0.2..0.2 horizontal shift
+  const [captions, setCaptions] = useState(true);
   const [plan, setPlan] = useState("free");
   const [job, setJob] = useState<JobStatus | null>(null);
   const [reelIdx, setReelIdx] = useState<number | null>(null);
@@ -340,7 +341,8 @@ export function AppClient() {
         chosen.map((c) => ({ start: c.start, end: c.end })),
         quality,
         autoFrame,
-        autoFrame ? reframeNudge : 0
+        autoFrame ? reframeNudge : 0,
+        captions
       );
       setPhase("rendering");
       pollRef.current = setInterval(async () => {
@@ -696,6 +698,25 @@ export function AppClient() {
                   : autoFrame
                   ? "Follows the speaker · nudge if it frames the wrong side"
                   : "Simple center-crop"}
+              </span>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-3 border-t border-border pt-2.5">
+              <span className="w-20 text-xs font-medium text-muted-foreground">
+                Captions
+              </span>
+              <Switch
+                checked={captions}
+                onCheckedChange={(v) => {
+                  setCaptions(v);
+                  sfx.hover();
+                }}
+              />
+              <span className="text-sm font-medium">Burn animated captions</span>
+              <span className="ml-auto hidden text-[11px] text-muted-foreground sm:block">
+                {captions
+                  ? "Word chunks from the transcript, on-screen"
+                  : "No captions"}
               </span>
             </div>
           </div>

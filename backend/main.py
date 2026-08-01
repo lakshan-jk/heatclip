@@ -92,6 +92,7 @@ class RenderRequest(BaseModel):
     quality: str = "1080p"
     autoFrame: bool = True
     reframeNudge: float = 0.0
+    captions: bool = True
 
 
 class SignupRequest(BaseModel):
@@ -212,6 +213,7 @@ def render_endpoint(
         quality=quality,
         auto_frame=auto_frame,
         reframe_nudge=nudge,
+        captions=bool(req.captions),
     )
     background.add_task(jobs.run_job, job.id)
     return {"jobId": job.id, "status": job.status, "plan": plan, "quality": quality}

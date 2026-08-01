@@ -14,6 +14,7 @@ from typing import Callable, Optional
 import yt_dlp
 
 import autoframe
+import captions as captions_mod
 
 # 'android_vr' currently exposes the FULL format ladder (up to 2160p/4K), while the
 # plain 'android'/'web' clients are throttled to ~360p — so it's essential for real
@@ -37,6 +38,24 @@ _CRF = {"720p": "22", "1080p": "20", "2k": "19", "4k": "18"}
 
 class RenderError(Exception):
     pass
+
+
+def _has_ass_filter() -> bool:
+    """True if this ffmpeg build can burn subtitles (libass). Minimal builds can't."""
+    try:
+        out = subprocess.run(
+            ["ffmpeg", "-hide_banner", "-filters"], capture_output=True, text=True
+        ).stdout
+        for line in out.splitlines():
+            parts = line.split()
+            if len(parts) >= 2 and parts[1] == "ass":
+                return True
+    except Exception:  # noqa: BLE001
+        pass
+    return False
+
+
+HAS_SUBTITLES = _has_ass_filter()
 
 
 def _reframe_filter(w: int, h: int) -> str:
@@ -108,6 +127,7 @@ def render_clip(
     quality: str = DEFAULT_QUALITY,
     auto_frame: bool = True,
     reframe_nudge: float = 0.0,
+    captions_data: Optional[list] = None,
     on_status: Optional[Callable[[str], None]] = None,
 ) -> Path:
     w, h, src_cap = QUALITY.get(quality, QUALITY[DEFAULT_QUALITY])
@@ -126,5 +146,24 @@ def render_clip(
             if auto_frame
             else None
         )
-        _reframe(src, out_path, w, h, crf, vf)
+        if vf is None:
+            vf = _reframe_filter(w, h)
+        base_vf = vf
+        # Burn captions (transcript sliced to this clip, times made clip-relative).
+        if captions_data and HAS_SUBTITLES:
+            clip_caps = [
+                (max(0.0, c.start - start), min(end, c.end) - start, c.text)
+                for c in captions_data
+                if c.end > start and c.start < end
+            ]
+            if clip_caps:
+                ass = captions_mod.build_ass(clip_caps, w, h, workdir / "subs.ass")
+                vf = vf + f",ass={ass.as_posix()}"
+        try:
+            _reframe(src, out_path, w, h, crf, vf)
+        except RenderError:
+            if vf != base_vf:  # captions may have broken it — retry without them
+                _reframe(src, out_path, w, h, crf, base_vf)
+            else:
+                raise
     return out_path
