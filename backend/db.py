@@ -6,6 +6,7 @@ call with check_same_thread=False safe usage since each request opens its own.
 from __future__ import annotations
 
 import sqlite3
+from typing import Optional
 
 from config import DATA_DIR
 
@@ -51,13 +52,30 @@ def init_db() -> None:
         )
 
 
-def create_user(email: str, name: str, pw_hash: str, salt: str, created_at: str) -> dict:
+def create_user(
+    email: str, name: str, pw_hash: str, salt: str, created_at: str, plan: str = "free"
+) -> dict:
     with _conn() as c:
         cur = c.execute(
-            "INSERT INTO users (email, name, pw_hash, salt, created_at) VALUES (?,?,?,?,?)",
-            (email, name, pw_hash, salt, created_at),
+            "INSERT INTO users (email, name, pw_hash, salt, plan, created_at) "
+            "VALUES (?,?,?,?,?,?)",
+            (email, name, pw_hash, salt, plan, created_at),
         )
         return {"id": cur.lastrowid, "email": email, "name": name}
+
+
+def set_password(email: str, pw_hash: str, salt: str, plan: Optional[str] = None) -> None:
+    with _conn() as c:
+        if plan is not None:
+            c.execute(
+                "UPDATE users SET pw_hash=?, salt=?, plan=? WHERE email=?",
+                (pw_hash, salt, plan, email),
+            )
+        else:
+            c.execute(
+                "UPDATE users SET pw_hash=?, salt=? WHERE email=?",
+                (pw_hash, salt, email),
+            )
 
 
 def get_user_by_email(email: str) -> dict | None:

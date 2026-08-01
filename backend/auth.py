@@ -90,6 +90,22 @@ def login(email: str, password: str) -> dict:
     }
 
 
+def provision_admin() -> bool:
+    """Create/refresh the owner admin account from env (ADMIN_EMAIL + ADMIN_PASSWORD).
+    Because the account then already exists, no one else can sign up with that email,
+    and only the password holder can sign in as admin. No-op if no password is set."""
+    email, pw = config.ADMIN_EMAIL, config.ADMIN_PASSWORD
+    if not email or not pw:
+        return False
+    salt = secrets.token_hex(16)
+    pw_hash = _hash(pw, salt)
+    if db.get_user_by_email(email):
+        db.set_password(email, pw_hash, salt, plan="admin")
+    else:
+        db.create_user(email, "Admin", pw_hash, salt, _now_iso(), plan="admin")
+    return True
+
+
 def make_token(email: str) -> str:
     payload = {
         "sub": email,

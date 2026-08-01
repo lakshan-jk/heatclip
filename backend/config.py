@@ -10,12 +10,17 @@ from pathlib import Path
 DATA_DIR = Path(os.environ.get("HEATCLIP_DATA", Path(__file__).parent))
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 
-# Super admins get full ("admin") access regardless of subscription. Configurable
-# via HEATCLIP_ADMINS (comma-separated); a built-in owner account is always included.
+# The owner/super-admin account. Pre-provisioned at startup (see auth.provision_admin)
+# from ADMIN_EMAIL + ADMIN_PASSWORD so only the password holder can sign in as admin —
+# and because the account already exists, nobody else can claim the email.
+ADMIN_EMAIL = os.environ.get("HEATCLIP_ADMIN_EMAIL", "kumarlakshan1032@gmail.com").strip().lower()
+ADMIN_PASSWORD = os.environ.get("HEATCLIP_ADMIN_PASSWORD", "")
+
+# Super admins get full ("admin") access regardless of subscription.
 _admins_env = os.environ.get("HEATCLIP_ADMINS", "")
 SUPER_ADMINS = {
     e.strip().lower()
-    for e in ("kumarlakshan1032@gmail.com," + _admins_env).split(",")
+    for e in (ADMIN_EMAIL + "," + _admins_env).split(",")
     if e.strip()
 }
 

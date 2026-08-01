@@ -50,6 +50,13 @@ def _startup() -> None:
         )
     if config.ALLOWED_ORIGINS == ["*"]:
         log.warning("ALLOWED_ORIGINS is '*' — restrict this to your domain in production.")
+    if auth.provision_admin():
+        log.info("Admin account provisioned for %s", config.ADMIN_EMAIL)
+    else:
+        log.warning(
+            "HEATCLIP_ADMIN_PASSWORD not set — admin account not pre-provisioned. "
+            "Anyone could sign up with the admin email. Set it in production."
+        )
     jobs.start_cleanup()  # background TTL cleanup of old render output
 
 
