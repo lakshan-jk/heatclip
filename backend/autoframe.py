@@ -12,10 +12,22 @@ from typing import Optional
 
 import cv2
 import numpy as np
+from pathlib import Path as _Path
 
+# YuNet DNN detector (better on wide/profile/small faces); Haar as fallback.
+_YUNET_PATH = _Path(__file__).parent / "models" / "face_detection_yunet.onnx"
 _CASCADE = cv2.CascadeClassifier(
     os.path.join(cv2.data.haarcascades, "haarcascade_frontalface_default.xml")
 )
+
+
+def _make_yunet(w: int, h: int):
+    try:
+        if _YUNET_PATH.exists() and hasattr(cv2, "FaceDetectorYN"):
+            return cv2.FaceDetectorYN.create(str(_YUNET_PATH), "", (w, h), 0.6, 0.3, 50)
+    except Exception:  # noqa: BLE001
+        pass
+    return None
 
 SAMPLE_FPS = 4.0        # detections per second
 DETECT_WIDTH = 640      # downscale frames to this width for fast detection
@@ -39,6 +51,9 @@ def _detect(src: Path):
     step = max(1, int(round(fps / SAMPLE_FPS)))
     scale = DETECT_WIDTH / W if W > DETECT_WIDTH else 1.0
     inv = 1.0 / scale
+    sw = int(round(W * scale))
+    sh = int(round(H * scale))
+    yunet = _make_yunet(sw, sh)
 
     ts, cxs, cys, fhs = [], [], [], []
     n_samples = 0
@@ -51,14 +66,25 @@ def _detect(src: Path):
             ok, frame = cap.retrieve()
             if ok:
                 small = (
-                    cv2.resize(frame, None, fx=scale, fy=scale)
-                    if scale < 1.0
-                    else frame
+                    cv2.resize(frame, (sw, sh)) if scale < 1.0 else frame
                 )
-                gray = cv2.cvtColor(small, cv2.COLOR_BGR2GRAY)
-                faces = _CASCADE.detectMultiScale(gray, 1.15, 5, minSize=(24, 24))
-                if len(faces):
-                    x, y, w, h = max(faces, key=lambda f: f[2] * f[3])
+                box = None  # (x, y, w, h) in the downscaled frame
+                if yunet is not None:
+                    try:
+                        yunet.setInputSize((small.shape[1], small.shape[0]))
+                        _, faces = yunet.detect(small)
+                        if faces is not None and len(faces):
+                            f = max(faces, key=lambda r: r[2] * r[3])
+                            box = (f[0], f[1], f[2], f[3])
+                    except Exception:  # noqa: BLE001 - fall back to Haar this frame
+                        box = None
+                if box is None:
+                    gray = cv2.cvtColor(small, cv2.COLOR_BGR2GRAY)
+                    faces = _CASCADE.detectMultiScale(gray, 1.15, 5, minSize=(24, 24))
+                    if len(faces):
+                        box = max(faces, key=lambda f: f[2] * f[3])
+                if box is not None:
+                    x, y, w, h = box
                     ts.append(i / fps)
                     cxs.append((x + w / 2) * inv)
                     cys.append((y + h / 2) * inv)
