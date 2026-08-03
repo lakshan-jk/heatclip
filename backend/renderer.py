@@ -24,6 +24,7 @@ DOWNLOAD_CLIENTS: list[list[str]] = [["android_vr"], ["android"], ["web"], ["tv"
 # Export quality → (out_width, out_height, max source height to download).
 # 9:16 vertical. Higher tiers pull higher-res source and encode at higher bitrate.
 QUALITY: dict[str, tuple[int, int, int]] = {
+    "preview": (405, 720, 480),  # fast, low-res framing check
     "720p": (720, 1280, 720),
     "1080p": (1080, 1920, 1080),
     "2k": (1440, 2560, 1440),
@@ -33,7 +34,7 @@ DEFAULT_QUALITY = "1080p"
 
 # CRF per tier — lower = higher quality/bigger file. Higher resolutions get a
 # slightly lower CRF so detail holds up.
-_CRF = {"720p": "22", "1080p": "20", "2k": "19", "4k": "18"}
+_CRF = {"preview": "28", "720p": "22", "1080p": "20", "2k": "19", "4k": "18"}
 
 
 class RenderError(Exception):

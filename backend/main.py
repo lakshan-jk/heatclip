@@ -95,6 +95,14 @@ class RenderRequest(BaseModel):
     captions: bool = True
 
 
+class PreviewRequest(BaseModel):
+    url: str
+    clip: ClipSpec
+    autoFrame: bool = True
+    reframeNudge: float = 0.0
+    captions: bool = True
+
+
 class SignupRequest(BaseModel):
     email: str
     password: str
@@ -217,6 +225,30 @@ def render_endpoint(
     )
     background.add_task(jobs.run_job, job.id)
     return {"jobId": job.id, "status": job.status, "plan": plan, "quality": quality}
+
+
+@app.post("/preview")
+def preview_endpoint(
+    req: PreviewRequest, background: BackgroundTasks, request: Request
+) -> dict:
+    """Fast low-res render of a single clip to check framing before committing."""
+    _limit(request, "preview", 20, 600)
+    try:
+        url = security.validate_youtube_url(req.url)
+        security.validate_clips([req.clip], max_clips=1)
+    except security.ValidationError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    nudge = max(-0.35, min(0.35, req.reframeNudge))
+    job = jobs.create_job(
+        url,
+        [req.clip.model_dump()],
+        quality="preview",
+        auto_frame=req.autoFrame,
+        reframe_nudge=nudge,
+        captions=bool(req.captions),
+    )
+    background.add_task(jobs.run_job, job.id)
+    return {"jobId": job.id, "status": job.status}
 
 
 @app.get("/jobs/{job_id}")

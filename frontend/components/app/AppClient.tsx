@@ -22,6 +22,7 @@ import {
   ChevronUp,
   ChevronDown,
   Lock,
+  Eye,
 } from "lucide-react";
 import HeatmapTimeline from "@/components/HeatmapTimeline";
 import { AppBar } from "@/components/app/AppBar";
@@ -34,6 +35,7 @@ import {
   analyze,
   getJob,
   me,
+  preview,
   render,
   type AnalyzeResult,
   type JobStatus,
@@ -182,7 +184,10 @@ export function AppClient() {
   const [plan, setPlan] = useState("free");
   const [job, setJob] = useState<JobStatus | null>(null);
   const [reelIdx, setReelIdx] = useState<number | null>(null);
+  const [previewingId, setPreviewingId] = useState<string | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const previewPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const touchStartY = useRef<number | null>(null);
 
   // Finished clips form the swipeable reel feed.
@@ -362,7 +367,42 @@ export function AppClient() {
     }
   }
 
+  async function previewClip(c: Clip) {
+    if (!data || previewingId) return;
+    setPreviewingId(c.id);
+    setPreviewUrl(null);
+    sfx.click();
+    try {
+      const { jobId } = await preview(
+        data.webpageUrl,
+        { start: c.start, end: c.end },
+        autoFrame && planAllowsAutoframe(plan),
+        autoFrame ? reframeNudge : 0,
+        captions
+      );
+      previewPollRef.current = setInterval(async () => {
+        try {
+          const j = await getJob(jobId);
+          const clip = j.clips[0];
+          if (clip?.status === "done" && clip.clip_url) {
+            if (previewPollRef.current) clearInterval(previewPollRef.current);
+            setPreviewUrl(clip.clip_url);
+            setPreviewingId(null);
+          } else if (j.status === "error" || clip?.status === "error") {
+            if (previewPollRef.current) clearInterval(previewPollRef.current);
+            setPreviewingId(null);
+          }
+        } catch {
+          /* keep polling */
+        }
+      }, 1500);
+    } catch {
+      setPreviewingId(null);
+    }
+  }
+
   function reset() {
+    if (previewPollRef.current) clearInterval(previewPollRef.current);
     if (pollRef.current) clearInterval(pollRef.current);
     setPhase("input");
     setData(null);
@@ -809,21 +849,36 @@ export function AppClient() {
                     </div>
                   </div>
 
-                  {/* include toggle */}
                   <div
-                    className="flex shrink-0 flex-col items-center gap-1"
+                    className="flex shrink-0 items-center gap-3"
                     onClick={(e) => e.stopPropagation()}
                   >
-                    <Switch
-                      checked={c.include}
-                      onCheckedChange={(v) => {
-                        updateClip(c.id, { include: v });
-                        sfx.hover();
-                      }}
-                    />
-                    <span className="text-[10px] text-muted-foreground">
-                      {c.include ? "in" : "off"}
-                    </span>
+                    {/* quick preview */}
+                    <button
+                      onClick={() => previewClip(c)}
+                      disabled={!!previewingId}
+                      title="Quick preview (low-res)"
+                      className="flex h-8 w-8 items-center justify-center rounded-full border border-border bg-card text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
+                    >
+                      {previewingId === c.id ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Eye className="h-4 w-4" />
+                      )}
+                    </button>
+                    {/* include toggle */}
+                    <div className="flex flex-col items-center gap-1">
+                      <Switch
+                        checked={c.include}
+                        onCheckedChange={(v) => {
+                          updateClip(c.id, { include: v });
+                          sfx.hover();
+                        }}
+                      />
+                      <span className="text-[10px] text-muted-foreground">
+                        {c.include ? "in" : "off"}
+                      </span>
+                    </div>
                   </div>
                 </div>
               );
@@ -933,6 +988,39 @@ export function AppClient() {
               </div>
             ))}
           </div>
+        </div>
+      )}
+
+      {/* Quick preview modal (single low-res clip) */}
+      {previewUrl && (
+        <div
+          className="fixed inset-0 z-[70] flex items-center justify-center bg-black/90 p-4 backdrop-blur-sm"
+          onClick={() => setPreviewUrl(null)}
+        >
+          <div
+            className="flex flex-col items-center gap-3"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <span className="rounded-full bg-white/10 px-3 py-1 text-xs font-semibold text-white/90 backdrop-blur">
+              Low-res preview · check framing
+            </span>
+            {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
+            <video
+              src={previewUrl}
+              autoPlay
+              controls
+              playsInline
+              loop
+              className="h-[80vh] max-h-[80vh] w-auto max-w-full rounded-3xl shadow-2xl"
+            />
+          </div>
+          <button
+            onClick={() => setPreviewUrl(null)}
+            aria-label="Close"
+            className="absolute right-5 top-5 grid h-10 w-10 place-items-center rounded-full bg-white/10 text-white backdrop-blur transition hover:bg-white/20"
+          >
+            <X className="h-5 w-5" />
+          </button>
         </div>
       )}
 

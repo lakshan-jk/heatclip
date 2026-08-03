@@ -91,6 +91,21 @@ export async function getJob(jobId: string): Promise<JobStatus> {
   return jsonOrThrow(res);
 }
 
+export async function preview(
+  url: string,
+  clip: { start: number; end: number },
+  autoFrame: boolean,
+  reframeNudge: number,
+  captions: boolean
+): Promise<{ jobId: string }> {
+  const res = await fetch("/api/preview", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ url, clip, autoFrame, reframeNudge, captions }),
+  });
+  return jsonOrThrow(res);
+}
+
 /* ---------------- auth + contact ---------------- */
 
 const TOKEN_KEY = "hc_token";
