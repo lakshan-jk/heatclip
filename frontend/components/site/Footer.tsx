@@ -61,7 +61,14 @@ export function Footer() {
       <div className="border-t border-border">
         <div className="container flex h-14 items-center justify-between text-xs text-muted-foreground">
           <span>© {new Date().getFullYear()} HeatClip. All rights reserved.</span>
-          <span>Made for creators.</span>
+          <div className="flex items-center gap-4">
+            <Link href="/terms" className="hover:text-foreground">
+              Terms
+            </Link>
+            <Link href="/privacy" className="hover:text-foreground">
+              Privacy
+            </Link>
+          </div>
         </div>
       </div>
     </footer>
