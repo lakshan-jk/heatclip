@@ -13,6 +13,7 @@ from dataclasses import asdict, dataclass, field
 from typing import Optional
 
 import analyzer
+import transcribe
 from config import DATA_DIR
 from renderer import RenderError, render_clip
 
@@ -93,8 +94,9 @@ def run_job(job_id: str, files_base_url: str = "/files") -> None:
     if not job:
         return
     job.status = "running"
-    # Fetch the transcript once for the whole job if captions are enabled.
+    # Prefer YouTube captions (fast); if absent, fall back to Whisper per clip.
     caps = analyzer.fetch_captions(job.url) if job.captions else None
+    use_whisper = bool(job.captions and not caps and transcribe.available())
     for clip in job.clips:
         out = STORAGE / job.id / f"clip_{clip.index}.mp4"
         try:
@@ -104,6 +106,7 @@ def run_job(job_id: str, files_base_url: str = "/files") -> None:
                 auto_frame=job.auto_frame,
                 reframe_nudge=job.reframe_nudge,
                 captions_data=caps,
+                whisper_captions=use_whisper,
                 on_status=lambda s, c=clip: setattr(c, "status", s),
             )
             clip.status = "done"

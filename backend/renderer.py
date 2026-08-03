@@ -15,6 +15,7 @@ import yt_dlp
 
 import autoframe
 import captions as captions_mod
+import transcribe
 
 # 'android_vr' currently exposes the FULL format ladder (up to 2160p/4K), while the
 # plain 'android'/'web' clients are throttled to ~360p — so it's essential for real
@@ -129,6 +130,7 @@ def render_clip(
     auto_frame: bool = True,
     reframe_nudge: float = 0.0,
     captions_data: Optional[list] = None,
+    whisper_captions: bool = False,
     on_status: Optional[Callable[[str], None]] = None,
 ) -> Path:
     w, h, src_cap = QUALITY.get(quality, QUALITY[DEFAULT_QUALITY])
@@ -150,13 +152,19 @@ def render_clip(
         if vf is None:
             vf = _reframe_filter(w, h)
         base_vf = vf
-        # Burn captions (transcript sliced to this clip, times made clip-relative).
-        if captions_data and HAS_SUBTITLES:
-            clip_caps = [
-                (max(0.0, c.start - start), min(end, c.end) - start, c.text)
-                for c in captions_data
-                if c.end > start and c.start < end
-            ]
+        # Burn captions. Prefer YouTube captions (fast); else Whisper the clip audio.
+        if HAS_SUBTITLES:
+            clip_caps = None
+            if captions_data:
+                clip_caps = [
+                    (max(0.0, c.start - start), min(end, c.end) - start, c.text)
+                    for c in captions_data
+                    if c.end > start and c.start < end
+                ]
+            elif whisper_captions:
+                if on_status:
+                    on_status("transcribing")
+                clip_caps = transcribe.transcribe(src)  # already clip-relative
             if clip_caps:
                 ass = captions_mod.build_ass(clip_caps, w, h, workdir / "subs.ass")
                 vf = vf + f",ass={ass.as_posix()}"
