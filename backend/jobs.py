@@ -40,6 +40,7 @@ class Job:
     auto_frame: bool = True
     reframe_nudge: float = 0.0
     captions: bool = False
+    caption_theme: str = "karaoke"
     status: str = "pending"  # pending|running|done|error
     clips: list[ClipResult] = field(default_factory=list)
     error: Optional[str] = None
@@ -66,6 +67,7 @@ def create_job(
     auto_frame: bool = True,
     reframe_nudge: float = 0.0,
     captions: bool = False,
+    caption_theme: str = "karaoke",
 ) -> Job:
     job_id = uuid.uuid4().hex[:12]
     job = Job(
@@ -75,6 +77,7 @@ def create_job(
         auto_frame=auto_frame,
         reframe_nudge=reframe_nudge,
         captions=captions,
+        caption_theme=caption_theme,
         clips=[
             ClipResult(index=i, start=float(c["start"]), end=float(c["end"]))
             for i, c in enumerate(clips)
@@ -107,6 +110,7 @@ def run_job(job_id: str, files_base_url: str = "/files") -> None:
                 reframe_nudge=job.reframe_nudge,
                 captions_data=caps,
                 whisper_captions=use_whisper,
+                caption_theme=job.caption_theme,
                 on_status=lambda s, c=clip: setattr(c, "status", s),
             )
             clip.status = "done"

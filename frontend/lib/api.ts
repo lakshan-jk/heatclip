@@ -72,7 +72,8 @@ export async function render(
   quality: string = "1080p",
   autoFrame: boolean = true,
   reframeNudge: number = 0,
-  captions: boolean = true
+  captions: boolean = true,
+  captionTheme: string = "karaoke"
 ): Promise<{ jobId: string }> {
   const token = getToken();
   const res = await fetch("/api/render", {
@@ -81,7 +82,15 @@ export async function render(
       "Content-Type": "application/json",
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
-    body: JSON.stringify({ url, clips, quality, autoFrame, reframeNudge, captions }),
+    body: JSON.stringify({
+      url,
+      clips,
+      quality,
+      autoFrame,
+      reframeNudge,
+      captions,
+      captionTheme,
+    }),
   });
   return jsonOrThrow(res);
 }
@@ -96,12 +105,13 @@ export async function preview(
   clip: { start: number; end: number },
   autoFrame: boolean,
   reframeNudge: number,
-  captions: boolean
+  captions: boolean,
+  captionTheme: string = "karaoke"
 ): Promise<{ jobId: string }> {
   const res = await fetch("/api/preview", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ url, clip, autoFrame, reframeNudge, captions }),
+    body: JSON.stringify({ url, clip, autoFrame, reframeNudge, captions, captionTheme }),
   });
   return jsonOrThrow(res);
 }

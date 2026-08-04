@@ -93,6 +93,7 @@ class RenderRequest(BaseModel):
     autoFrame: bool = True
     reframeNudge: float = 0.0
     captions: bool = True
+    captionTheme: str = "karaoke"
 
 
 class PreviewRequest(BaseModel):
@@ -101,6 +102,7 @@ class PreviewRequest(BaseModel):
     autoFrame: bool = True
     reframeNudge: float = 0.0
     captions: bool = True
+    captionTheme: str = "karaoke"
 
 
 class SignupRequest(BaseModel):
@@ -222,6 +224,7 @@ def render_endpoint(
         auto_frame=auto_frame,
         reframe_nudge=nudge,
         captions=bool(req.captions),
+        caption_theme=req.captionTheme,
     )
     background.add_task(jobs.run_job, job.id)
     return {"jobId": job.id, "status": job.status, "plan": plan, "quality": quality}
@@ -246,6 +249,7 @@ def preview_endpoint(
         auto_frame=req.autoFrame,
         reframe_nudge=nudge,
         captions=bool(req.captions),
+        caption_theme=req.captionTheme,
     )
     background.add_task(jobs.run_job, job.id)
     return {"jobId": job.id, "status": job.status}

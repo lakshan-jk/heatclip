@@ -31,16 +31,24 @@ def _get_model():
 
 
 def transcribe(path) -> list[tuple[float, float, str]]:
-    """Return [(start, end, text)] with times relative to the file's own timeline."""
+    """Return WORD-level [(start, end, word)] relative to the file's own timeline
+    (for karaoke captions). Falls back to segment text if word timing is absent."""
     if not _ENABLED:
         return []
     try:
         model = _get_model()
-        segments, _info = model.transcribe(str(path), vad_filter=True)
-        return [
-            (float(s.start), float(s.end), s.text.strip())
-            for s in segments
-            if s.text and s.text.strip()
-        ]
+        segments, _info = model.transcribe(
+            str(path), vad_filter=True, word_timestamps=True
+        )
+        words: list[tuple[float, float, str]] = []
+        for seg in segments:
+            segwords = getattr(seg, "words", None)
+            if segwords:
+                for w in segwords:
+                    if w.word and w.word.strip():
+                        words.append((float(w.start), float(w.end), w.word.strip()))
+            elif seg.text and seg.text.strip():
+                words.append((float(seg.start), float(seg.end), seg.text.strip()))
+        return words
     except Exception:  # noqa: BLE001 - never fail a render over transcription
         return []

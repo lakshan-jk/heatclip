@@ -131,6 +131,7 @@ def render_clip(
     reframe_nudge: float = 0.0,
     captions_data: Optional[list] = None,
     whisper_captions: bool = False,
+    caption_theme: str = "karaoke",
     on_status: Optional[Callable[[str], None]] = None,
 ) -> Path:
     w, h, src_cap = QUALITY.get(quality, QUALITY[DEFAULT_QUALITY])
@@ -154,19 +155,22 @@ def render_clip(
         base_vf = vf
         # Burn captions. Prefer YouTube captions (fast); else Whisper the clip audio.
         if HAS_SUBTITLES:
-            clip_caps = None
+            words = None
             if captions_data:
-                clip_caps = [
+                clip_lines = [
                     (max(0.0, c.start - start), min(end, c.end) - start, c.text)
                     for c in captions_data
                     if c.end > start and c.start < end
                 ]
+                words = captions_mod.words_from_lines(clip_lines)
             elif whisper_captions:
                 if on_status:
                     on_status("transcribing")
-                clip_caps = transcribe.transcribe(src)  # already clip-relative
-            if clip_caps:
-                ass = captions_mod.build_ass(clip_caps, w, h, workdir / "subs.ass")
+                words = transcribe.transcribe(src)  # word-level, clip-relative
+            if words:
+                ass = captions_mod.build_ass(
+                    words, w, h, workdir / "subs.ass", theme=caption_theme
+                )
                 vf = vf + f",ass={ass.as_posix()}"
         try:
             _reframe(src, out_path, w, h, crf, vf)

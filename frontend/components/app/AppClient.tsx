@@ -181,6 +181,7 @@ export function AppClient() {
   const [autoFrame, setAutoFrame] = useState(true);
   const [reframeNudge, setReframeNudge] = useState(0); // -0.2..0.2 horizontal shift
   const [captions, setCaptions] = useState(true);
+  const [captionTheme, setCaptionTheme] = useState("karaoke");
   const [plan, setPlan] = useState("free");
   const [job, setJob] = useState<JobStatus | null>(null);
   const [reelIdx, setReelIdx] = useState<number | null>(null);
@@ -347,7 +348,8 @@ export function AppClient() {
         quality,
         autoFrame,
         autoFrame ? reframeNudge : 0,
-        captions
+        captions,
+        captionTheme
       );
       setPhase("rendering");
       pollRef.current = setInterval(async () => {
@@ -378,7 +380,8 @@ export function AppClient() {
         { start: c.start, end: c.end },
         autoFrame && planAllowsAutoframe(plan),
         autoFrame ? reframeNudge : 0,
-        captions
+        captions,
+        captionTheme
       );
       previewPollRef.current = setInterval(async () => {
         try {
@@ -753,10 +756,30 @@ export function AppClient() {
                 }}
               />
               <span className="text-sm font-medium">Burn animated captions</span>
+
+              {captions && (
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {["karaoke", "hormozi", "neon", "classic", "minimal"].map((t) => (
+                    <button
+                      key={t}
+                      onClick={() => {
+                        setCaptionTheme(t);
+                        sfx.hover();
+                      }}
+                      className={`rounded-full px-2.5 py-1 text-[11px] font-semibold capitalize transition-all ${
+                        captionTheme === t
+                          ? "bg-heat text-white shadow-glow"
+                          : "border border-border bg-muted/50 text-foreground hover:bg-muted"
+                      }`}
+                    >
+                      {t}
+                    </button>
+                  ))}
+                </div>
+              )}
+
               <span className="ml-auto hidden text-[11px] text-muted-foreground sm:block">
-                {captions
-                  ? "Word chunks from the transcript, on-screen"
-                  : "No captions"}
+                {captions ? "Word-by-word, spoken-word highlight" : "No captions"}
               </span>
             </div>
           </div>
